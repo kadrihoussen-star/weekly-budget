@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- أربعة أعمدة (الأسابيع الأربعة) على خط أساس، وعملة فوق الأولين. المحتوى داخل المنطقة الآمنة 18..90. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- خط الأساس -->
+    <path
+        android:fillColor="#80FFFFFF"
+        android:pathData="M24,83 L88,83 L88,85 L24,85 Z" />
+
+    <!-- الأعمدة -->
+    <path
+        android:fillColor="#D9FFFFFF"
+        android:pathData="M28,80 L28,65 Q28,62 31,62 L36,62 Q39,62 39,65 L39,80 Z" />
+    <path
+        android:fillColor="#D9FFFFFF"
+        android:pathData="M43,80 L43,53 Q43,50 46,50 L51,50 Q54,50 54,53 L54,80 Z" />
+    <path
+        android:fillColor="#D9FFFFFF"
+        android:pathData="M58,80 L58,59 Q58,56 61,56 L66,56 Q69,56 69,59 L69,80 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M73,80 L73,43 Q73,40 76,40 L81,40 Q84,40 84,43 L84,80 Z" />
+
+    <!-- العملة -->
+    <path
+        android:fillColor="#FBBF24"
+        android:pathData="M40,30 m-12,0 a12,12 0 1,0 24,0 a12,12 0 1,0 -24,0" />
+    <path
+        android:fillColor="#F59E0B"
+        android:pathData="M40,30 m-8,0 a8,8 0 1,0 16,0 a8,8 0 1,0 -16,0" />
+    <path
+        android:fillColor="#FDE68A"
+        android:pathData="M38.5,25 L41.5,25 L41.5,35 L38.5,35 Z" />
+</vector>

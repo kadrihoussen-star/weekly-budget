@@ -145,6 +145,8 @@ fun SettingsScreen(state: UiState, vm: BudgetViewModel) {
                 Text("إضافة فئة جديدة")
             }
         }
+
+        AboutCard()
     }
 
     if (showAddCategory) {

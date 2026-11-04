@@ -19,7 +19,7 @@ import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Payments
-import androidx.compose.material.icons.filled.Savings
+import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
@@ -50,7 +50,7 @@ fun SavingsDebtsScreen(state: UiState, vm: BudgetViewModel) {
                 selected = tab == 0,
                 onClick = { tab = 0 },
                 text = { Text("الادخار") },
-                icon = { Icon(Icons.Filled.Savings, null) }
+                icon = { Icon(Icons.Filled.AccountBalanceWallet, null) }
             )
             Tab(
                 selected = tab == 1,
@@ -79,7 +79,7 @@ private fun SavingsTab(state: UiState, vm: BudgetViewModel) {
             item {
                 AppCard {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconBadge(Icons.Filled.Savings, Positive, size = 46.dp)
+                        IconBadge(Icons.Filled.AccountBalanceWallet, Positive, size = 46.dp)
                         Spacer(Modifier.width(14.dp))
                         Column {
                             Text("إجمالي المدخر", color = MaterialTheme.colorScheme.secondary)
@@ -90,12 +90,12 @@ private fun SavingsTab(state: UiState, vm: BudgetViewModel) {
                 }
             }
             if (state.goals.isEmpty()) {
-                item { EmptyHint(Icons.Filled.Savings, "أضف هدف ادخار وحدّد المبلغ الشهري.") }
+                item { EmptyHint(Icons.Filled.AccountBalanceWallet, "أضف هدف ادخار وحدّد المبلغ الشهري.") }
             }
             items(state.goals, key = { it.goal.id }) { g ->
                 AppCard {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconBadge(Icons.Filled.Savings, Positive)
+                        IconBadge(Icons.Filled.AccountBalanceWallet, Positive)
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
                             Text(g.goal.name, fontWeight = FontWeight.Bold)

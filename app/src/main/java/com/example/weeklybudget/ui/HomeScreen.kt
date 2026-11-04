@@ -19,7 +19,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.ReceiptLong
-import androidx.compose.material.icons.filled.Savings
+import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
@@ -153,7 +153,7 @@ private fun ObligationsCard(state: UiState) {
         SectionHeader("الالتزامات الشهرية")
         ObligationRow(Icons.Filled.ReceiptLong, "الفواتير", state.billsTotal, Color(0xFFF97316))
         ObligationRow(Icons.Filled.AccountBalance, "أقساط الديون", state.debtPlanned, Negative)
-        ObligationRow(Icons.Filled.Savings, "الادخار", state.savingsPlanned, Positive)
+        ObligationRow(Icons.Filled.AccountBalanceWallet, "الادخار", state.savingsPlanned, Positive)
         HorizontalDivider()
         LabeledRow("المتاح للتوزيع على الأسابيع", money(state.distributable), bold = true,
             valueColor = if (state.distributable < 0) Negative else MaterialTheme.colorScheme.onSurface)

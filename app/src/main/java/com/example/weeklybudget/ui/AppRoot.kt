@@ -8,7 +8,7 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material.icons.filled.ReceiptLong
-import androidx.compose.material.icons.filled.Savings
+import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -37,7 +37,7 @@ private enum class AppTab(val label: String, val icon: ImageVector) {
     Home("الرئيسية", Icons.Filled.Home),
     Expenses("المصاريف", Icons.Filled.Payments),
     Bills("الفواتير", Icons.Filled.ReceiptLong),
-    Savings("ادخار وديون", Icons.Filled.Savings),
+    Savings("ادخار وديون", Icons.Filled.AccountBalanceWallet),
     Settings("الإعدادات", Icons.Filled.Settings)
 }
 
