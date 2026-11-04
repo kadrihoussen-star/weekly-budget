@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material.icons.filled.AccountBalanceWallet
+import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
@@ -55,11 +56,21 @@ fun SavingsDebtsScreen(state: UiState, vm: BudgetViewModel) {
             Tab(
                 selected = tab == 1,
                 onClick = { tab = 1 },
+                text = { Text("الطوارئ") },
+                icon = { Icon(Icons.Filled.Shield, null) }
+            )
+            Tab(
+                selected = tab == 2,
+                onClick = { tab = 2 },
                 text = { Text("الديون") },
                 icon = { Icon(Icons.Filled.CreditCard, null) }
             )
         }
-        if (tab == 0) SavingsTab(state, vm) else DebtsTab(state, vm)
+        when (tab) {
+            0 -> SavingsTab(state, vm)
+            1 -> EmergencyTab(state, vm)
+            else -> DebtsTab(state, vm)
+        }
     }
 }
 

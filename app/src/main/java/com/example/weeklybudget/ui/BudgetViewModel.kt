@@ -3,19 +3,26 @@ package com.example.weeklybudget.ui
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.room.withTransaction
 import com.example.weeklybudget.data.AppDatabase
+import com.example.weeklybudget.data.BackupJson
 import com.example.weeklybudget.data.Bill
 import com.example.weeklybudget.data.Category
 import com.example.weeklybudget.data.Debt
 import com.example.weeklybudget.data.DebtPayment
+import com.example.weeklybudget.data.EmergencyEntry
+import com.example.weeklybudget.data.EmergencySettings
 import com.example.weeklybudget.data.Expense
 import com.example.weeklybudget.data.MonthBudget
 import com.example.weeklybudget.data.SavingsEntry
 import com.example.weeklybudget.data.SavingsGoal
+import com.example.weeklybudget.data.Snapshot
+import com.example.weeklybudget.data.WeekAdjustment
 import com.example.weeklybudget.domain.Period
 import com.example.weeklybudget.domain.WeekSummary
 import com.example.weeklybudget.domain.computeWeeks
 import com.example.weeklybudget.domain.periodOf
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -24,8 +31,12 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.time.LocalDate
 import java.time.YearMonth
+
+/** معرّف وجهة «صندوق الطوارئ» عند ادخار فائض أسبوع. */
+const val EMERGENCY_ID = -1L
 
 data class DebtUi(val debt: Debt, val paid: Double, val history: List<DebtPayment>) {
     val remaining: Double get() = (debt.total - paid).coerceAtLeast(0.0)
@@ -42,6 +53,20 @@ data class GoalUi(val goal: SavingsGoal, val saved: Double, val history: List<Sa
     val monthlyPlan: Double get() = minOf(goal.monthlyContribution, remaining)
 }
 
+data class EmergencyUi(
+    val target: Double = 0.0,
+    val monthlyContribution: Double = 0.0,
+    val balance: Double = 0.0,
+    val entries: List<EmergencyEntry> = emptyList()
+) {
+    val remaining: Double get() = if (target > 0) (target - balance).coerceAtLeast(0.0) else 0.0
+    val progress: Float
+        get() = if (target <= 0) 0f else (balance / target).toFloat().coerceIn(0f, 1f)
+    /** المساهمة الشهرية المخصومة من الدخل (تتوقف عند بلوغ الهدف). */
+    val monthlyPlan: Double
+        get() = if (target > 0) minOf(monthlyContribution, remaining) else monthlyContribution
+}
+
 data class UiState(
     val period: Period = periodOf(YearMonth.now(), 1),
     val hasBudget: Boolean = false,
@@ -53,20 +78,25 @@ data class UiState(
     val bills: List<Bill> = emptyList(),
     val debts: List<DebtUi> = emptyList(),
     val goals: List<GoalUi> = emptyList(),
+    val emergency: EmergencyUi = EmergencyUi(),
     val billsTotal: Double = 0.0,
     val debtPlanned: Double = 0.0,
     val savingsPlanned: Double = 0.0,
+    val emergencyPlanned: Double = 0.0,
     val weeks: List<WeekSummary> = emptyList(),
     val totalSpent: Double = 0.0,
     val currentWeek: Int? = null
 ) {
-    val obligations: Double get() = billsTotal + debtPlanned + savingsPlanned
+    val obligations: Double get() = billsTotal + debtPlanned + savingsPlanned + emergencyPlanned
     val distributable: Double get() = income - obligations
-    val remaining: Double get() = distributable - totalSpent
+    val totalSaved: Double get() = weeks.sumOf { it.saved }
+    /** مجموع العجز المسجّل في أسابيع هذه الفترة. */
+    val deficitTotal: Double get() = weeks.sumOf { it.deficit }
+    val remaining: Double get() = distributable - totalSpent - totalSaved
     val progress: Float
         get() = when {
             distributable <= 0.0 -> if (totalSpent > 0) 1f else 0f
-            else -> (totalSpent / distributable).toFloat().coerceIn(0f, 1f)
+            else -> ((totalSpent + totalSaved) / distributable).toFloat().coerceIn(0f, 1f)
         }
 }
 
@@ -82,12 +112,19 @@ private data class Commitments(
     val debts: List<Debt>,
     val debtPayments: List<DebtPayment>,
     val goals: List<SavingsGoal>,
-    val entries: List<SavingsEntry>
+    val entries: List<SavingsEntry>,
+    val emergencySettings: EmergencySettings?
+)
+
+private data class Extras(
+    val adjustments: List<WeekAdjustment>,
+    val emergencyEntries: List<EmergencyEntry>
 )
 
 class BudgetViewModel(app: Application) : AndroidViewModel(app) {
 
-    private val dao = AppDatabase.get(app).budgetDao()
+    private val db = AppDatabase.get(app)
+    private val dao = db.budgetDao()
     private val month = MutableStateFlow(YearMonth.now())
 
     init {
@@ -120,12 +157,17 @@ class BudgetViewModel(app: Application) : AndroidViewModel(app) {
             dao.observeDebts(),
             dao.observeDebtPayments(),
             dao.observeGoals(),
-            dao.observeSavingsEntries()
-        ) { d, dp, g, se -> Commitments(d, dp, g, se) }
-        combine(core, commitments) { c, k -> build(ym, c, k) }
+            dao.observeSavingsEntries(),
+            dao.observeEmergencySettings()
+        ) { d, dp, g, se, es -> Commitments(d, dp, g, se, es) }
+        val extras = combine(
+            dao.observeAdjustments(key),
+            dao.observeEmergencyEntries()
+        ) { a, ee -> Extras(a, ee) }
+        combine(core, commitments, extras) { c, k, x -> build(ym, c, k, x) }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), UiState())
 
-    private fun build(ym: YearMonth, c: Core, k: Commitments): UiState {
+    private fun build(ym: YearMonth, c: Core, k: Commitments, x: Extras): UiState {
         val income = c.budget?.income ?: 0.0
         val startDay = c.budget?.startDay ?: c.latest?.startDay ?: 1
         val rollover = c.budget?.rollover ?: true
@@ -139,10 +181,18 @@ class BudgetViewModel(app: Application) : AndroidViewModel(app) {
             val h = k.entries.filter { it.goalId == g.id }
             GoalUi(g, h.sumOf { it.amount }, h)
         }
+        val emergency = EmergencyUi(
+            target = k.emergencySettings?.target ?: 0.0,
+            monthlyContribution = k.emergencySettings?.monthlyContribution ?: 0.0,
+            balance = x.emergencyEntries.sumOf { it.amount },
+            entries = x.emergencyEntries
+        )
+
         val billsTotal = c.bills.sumOf { it.amount }
         val debtPlanned = debts.sumOf { it.monthlyDue }
         val savingsPlanned = goals.sumOf { it.monthlyPlan }
-        val distributable = income - billsTotal - debtPlanned - savingsPlanned
+        val emergencyPlanned = emergency.monthlyPlan
+        val distributable = income - billsTotal - debtPlanned - savingsPlanned - emergencyPlanned
 
         val today = LocalDate.now()
         return UiState(
@@ -156,10 +206,12 @@ class BudgetViewModel(app: Application) : AndroidViewModel(app) {
             bills = c.bills,
             debts = debts,
             goals = goals,
+            emergency = emergency,
             billsTotal = billsTotal,
             debtPlanned = debtPlanned,
             savingsPlanned = savingsPlanned,
-            weeks = computeWeeks(period, distributable, rollover, c.expenses, c.categories),
+            emergencyPlanned = emergencyPlanned,
+            weeks = computeWeeks(period, distributable, rollover, c.expenses, c.categories, x.adjustments),
             totalSpent = c.expenses.sumOf { it.amount },
             currentWeek = if (period.contains(today)) period.weekIndexOf(today) else null
         )
@@ -245,4 +297,93 @@ class BudgetViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun deleteSavingsEntry(e: SavingsEntry) = viewModelScope.launch { dao.deleteSavingsEntry(e) }
+
+    // ---- ادخار فائض الأسبوع وتغطية عجزه ----
+    /** ينقل [amount] من فائض الأسبوع إلى صندوق الطوارئ ([EMERGENCY_ID]) أو إلى هدف ادخار. */
+    fun saveWeekSurplus(weekIndex: Int, amount: Double, goalId: Long) = viewModelScope.launch {
+        val today = LocalDate.now().toEpochDay()
+        val entryId = if (goalId == EMERGENCY_ID) {
+            dao.insertEmergencyEntry(
+                EmergencyEntry(epochDay = today, amount = amount, note = "فائض الأسبوع ${weekIndex + 1}", source = WeekAdjustment.SAVE)
+            )
+        } else {
+            dao.insertSavingsEntry(
+                SavingsEntry(goalId = goalId, epochDay = today, amount = amount, source = WeekAdjustment.SAVE)
+            )
+        }
+        dao.insertAdjustment(
+            WeekAdjustment(
+                monthKey = month.value.toString(), weekIndex = weekIndex, kind = WeekAdjustment.SAVE,
+                amount = amount, epochDay = today, goalId = goalId, entryId = entryId
+            )
+        )
+    }
+
+    /** يغطي [amount] من عجز الأسبوع بسحبها من صندوق الطوارئ. */
+    fun coverWeekDeficit(weekIndex: Int, amount: Double) = viewModelScope.launch {
+        val today = LocalDate.now().toEpochDay()
+        val entryId = dao.insertEmergencyEntry(
+            EmergencyEntry(epochDay = today, amount = -amount, note = "تغطية عجز الأسبوع ${weekIndex + 1}", source = WeekAdjustment.COVER)
+        )
+        dao.insertAdjustment(
+            WeekAdjustment(
+                monthKey = month.value.toString(), weekIndex = weekIndex, kind = WeekAdjustment.COVER,
+                amount = amount, epochDay = today, goalId = EMERGENCY_ID, entryId = entryId
+            )
+        )
+    }
+
+    /** يتراجع عن ادخار أو تغطية ويحذف قيدهما المرتبط. */
+    fun undoAdjustment(a: WeekAdjustment) = viewModelScope.launch {
+        if (a.kind == WeekAdjustment.SAVE && a.goalId != EMERGENCY_ID) {
+            dao.deleteSavingsEntryById(a.entryId)
+        } else {
+            dao.deleteEmergencyEntry(a.entryId)
+        }
+        dao.deleteAdjustment(a.id)
+    }
+
+    // ---- صندوق الطوارئ ----
+    /** [amount] موجب للإيداع وسالب للسحب. */
+    fun addEmergencyEntry(amount: Double, note: String) = viewModelScope.launch {
+        dao.insertEmergencyEntry(EmergencyEntry(epochDay = LocalDate.now().toEpochDay(), amount = amount, note = note))
+    }
+
+    fun deleteEmergencyEntry(e: EmergencyEntry) = viewModelScope.launch { dao.deleteEmergencyEntry(e.id) }
+
+    fun saveEmergencySettings(target: Double, monthly: Double) = viewModelScope.launch {
+        dao.upsertEmergencySettings(EmergencySettings(0, target, monthly))
+    }
+
+    // ---- النسخ الاحتياطي ----
+    suspend fun exportJson(): String = withContext(Dispatchers.IO) {
+        BackupJson.encode(
+            Snapshot(
+                dao.allBudgets(), dao.allCategories(), dao.allExpenses(), dao.allBills(),
+                dao.allDebts(), dao.allDebtPayments(), dao.allGoals(), dao.allSavingsEntries(),
+                dao.allAdjustments(), dao.allEmergencyEntries(), dao.emergencySettings()
+            )
+        )
+    }
+
+    /** يستبدل كل البيانات الحالية بمحتوى النسخة. يعيد false إن كان الملف غير صالح (ولا يتغير شيء). */
+    suspend fun importJson(text: String): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val s = BackupJson.decode(text)
+            db.withTransaction {
+                dao.clearAdjustments(); dao.clearEmergencyEntries(); dao.clearEmergencySettings()
+                dao.clearSavingsEntries(); dao.clearGoals(); dao.clearDebtPayments(); dao.clearDebts()
+                dao.clearBills(); dao.clearExpenses(); dao.clearCategories(); dao.clearBudgets()
+
+                dao.putBudgets(s.budgets); dao.putCategories(s.categories); dao.putExpenses(s.expenses)
+                dao.putBills(s.bills); dao.putDebts(s.debts); dao.putDebtPayments(s.debtPayments)
+                dao.putGoals(s.goals); dao.putSavingsEntries(s.entries)
+                dao.putAdjustments(s.adjustments); dao.putEmergencyEntries(s.emergencyEntries)
+                s.emergencySettings?.let { dao.upsertEmergencySettings(it) }
+            }
+            true
+        } catch (e: Exception) {
+            false
+        }
+    }
 }

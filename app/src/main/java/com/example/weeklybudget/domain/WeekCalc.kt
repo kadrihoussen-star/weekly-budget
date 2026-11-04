@@ -2,6 +2,7 @@ package com.example.weeklybudget.domain
 
 import com.example.weeklybudget.data.Category
 import com.example.weeklybudget.data.Expense
+import com.example.weeklybudget.data.WeekAdjustment
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.temporal.ChronoUnit
@@ -42,30 +43,40 @@ data class WeekSummary(
     val start: LocalDate,
     val end: LocalDate,
     val baseBudget: Double,
+    /** فائض الأسبوع السابق فقط؛ العجز لا يُرحَّل أبدًا. */
     val carried: Double,
+    /** عجز غُطّي من صندوق الطوارئ. */
+    val covered: Double,
+    /** فائض نُقل إلى الادخار أو الطوارئ. */
+    val saved: Double,
     val spent: Double,
-    val byCategory: List<CategorySpend>
+    val byCategory: List<CategorySpend>,
+    val adjustments: List<WeekAdjustment>
 ) {
-    val available: Double get() = baseBudget + carried
-    val remaining: Double get() = available - spent
+    val available: Double get() = baseBudget + carried + covered
+    val remaining: Double get() = available - spent - saved
+    val surplus: Double get() = remaining.coerceAtLeast(0.0)
+    /** العجز المسجّل لهذا الأسبوع. */
+    val deficit: Double get() = (-remaining).coerceAtLeast(0.0)
     val progress: Float
         get() = when {
-            available <= 0.0 -> if (spent > 0) 1f else 0f
-            else -> (spent / available).toFloat().coerceIn(0f, 1f)
+            available <= 0.0 -> if (spent + saved > 0) 1f else 0f
+            else -> ((spent + saved) / available).toFloat().coerceIn(0f, 1f)
         }
     val isOver: Boolean get() = remaining < 0
 }
 
 /**
- * [distributable] = الدخل − (الفواتير + أقساط الديون + الادخار المخطط).
- * يُقسَّم بالتساوي على 4 أسابيع.
+ * [distributable] = الدخل − (الفواتير + أقساط الديون + الادخار + مساهمة الطوارئ).
+ * يُقسَّم بالتساوي على 4 أسابيع. عند تفعيل [rollover] يُرحَّل الفائض فقط (ما لم يُدَّخر)، ولا يُرحَّل العجز.
  */
 fun computeWeeks(
     period: Period,
     distributable: Double,
     rollover: Boolean,
     expenses: List<Expense>,
-    categories: List<Category>
+    categories: List<Category>,
+    adjustments: List<WeekAdjustment>
 ): List<WeekSummary> {
     val base = distributable / WEEKS
     val other = Category(id = -1, name = "أخرى", iconKey = "other")
@@ -83,16 +94,20 @@ fun computeWeeks(
         val map = perWeek[i]
         val rows = categories.map { CategorySpend(it, map[it.id] ?: 0.0) } +
             (map[-1L]?.let { listOf(CategorySpend(other, it)) } ?: emptyList())
+        val mine = adjustments.filter { it.weekIndex == i }
         val week = WeekSummary(
             index = i,
             start = period.weekStart(i),
             end = period.weekEnd(i),
             baseBudget = base,
             carried = if (rollover) carry else 0.0,
+            covered = mine.filter { it.kind == WeekAdjustment.COVER }.sumOf { it.amount },
+            saved = mine.filter { it.kind == WeekAdjustment.SAVE }.sumOf { it.amount },
             spent = map.values.sum(),
-            byCategory = rows
+            byCategory = rows,
+            adjustments = mine
         )
-        carry = week.remaining
+        carry = week.surplus
         week
     }
 }

@@ -11,34 +11,48 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBalance
-import androidx.compose.material.icons.filled.DateRange
-import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material.icons.filled.AccountBalanceWallet
+import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.example.weeklybudget.data.WeekAdjustment
 import com.example.weeklybudget.domain.CategorySpend
 import com.example.weeklybudget.domain.WeekSummary
 
 @Composable
 fun HomeScreen(state: UiState, vm: BudgetViewModel, onOpenSettings: () -> Unit) {
+    var saveFor by remember { mutableStateOf<WeekSummary?>(null) }
+    var coverFor by remember { mutableStateOf<WeekSummary?>(null) }
+
     Box(Modifier.fillMaxSize()) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
@@ -55,12 +69,50 @@ fun HomeScreen(state: UiState, vm: BudgetViewModel, onOpenSettings: () -> Unit) 
 
             item { ObligationsCard(state) }
 
+            if (state.deficitTotal > 0) {
+                item { DeficitCard(state) }
+            }
+
             item { SectionHeader("الأسابيع الأربعة") }
             items(state.weeks, key = { it.index }) { week ->
-                WeekCard(week, isCurrent = week.index == state.currentWeek)
+                WeekCard(
+                    week = week,
+                    isCurrent = week.index == state.currentWeek,
+                    onSave = { saveFor = week },
+                    onCover = { coverFor = week },
+                    onUndo = { vm.undoAdjustment(it) }
+                )
             }
         }
         AddExpenseFab(state, vm, Modifier.align(Alignment.BottomEnd).padding(16.dp))
+    }
+
+    saveFor?.let { week ->
+        SaveSurplusDialog(
+            surplus = week.surplus,
+            goals = state.goals,
+            onDismiss = { saveFor = null },
+            onSave = { amount, goalId ->
+                vm.saveWeekSurplus(week.index, amount, goalId)
+                saveFor = null
+            }
+        )
+    }
+    coverFor?.let { week ->
+        val balance = state.emergency.balance.coerceAtLeast(0.0)
+        val max = minOf(week.deficit, balance)
+        LimitedAmountDialog(
+            title = "تغطية عجز الأسبوع ${week.index + 1}",
+            hint = "العجز ${money(week.deficit)} · رصيد الطوارئ ${money(balance)}",
+            initial = max,
+            max = max,
+            confirmLabel = "تغطية",
+            onDismiss = { coverFor = null },
+            onSave = {
+                vm.coverWeekDeficit(week.index, it)
+                coverFor = null
+            }
+        )
     }
 }
 
@@ -139,7 +191,7 @@ private fun OverCommittedCard(distributable: Double) {
             Column {
                 Text("الالتزامات تتجاوز الدخل", fontWeight = FontWeight.Bold, color = Negative)
                 Text(
-                    "العجز ${money(-distributable)}. راجع الفواتير أو أقساط الديون أو مبلغ الادخار.",
+                    "العجز ${money(-distributable)}. راجع الفواتير أو أقساط الديون أو مبالغ الادخار والطوارئ.",
                     color = MaterialTheme.colorScheme.secondary
                 )
             }
@@ -154,15 +206,18 @@ private fun ObligationsCard(state: UiState) {
         ObligationRow(Icons.Filled.ReceiptLong, "الفواتير", state.billsTotal, Color(0xFFF97316))
         ObligationRow(Icons.Filled.AccountBalance, "أقساط الديون", state.debtPlanned, Negative)
         ObligationRow(Icons.Filled.AccountBalanceWallet, "الادخار", state.savingsPlanned, Positive)
+        ObligationRow(Icons.Filled.Shield, "صندوق الطوارئ", state.emergencyPlanned, Color(0xFF0EA5E9))
         HorizontalDivider()
-        LabeledRow("المتاح للتوزيع على الأسابيع", money(state.distributable), bold = true,
-            valueColor = if (state.distributable < 0) Negative else MaterialTheme.colorScheme.onSurface)
+        LabeledRow(
+            "المتاح للتوزيع على الأسابيع", money(state.distributable), bold = true,
+            valueColor = if (state.distributable < 0) Negative else MaterialTheme.colorScheme.onSurface
+        )
         LabeledRow("نصيب كل أسبوع", money(state.distributable / 4))
     }
 }
 
 @Composable
-private fun ObligationRow(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, value: Double, tint: Color) {
+private fun ObligationRow(icon: ImageVector, label: String, value: Double, tint: Color) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         IconBadge(icon, tint, size = 34.dp)
         Spacer(Modifier.width(12.dp))
@@ -171,8 +226,37 @@ private fun ObligationRow(icon: androidx.compose.ui.graphics.vector.ImageVector,
     }
 }
 
+/** سجل العجز: الأسابيع التي تجاوزت ميزانيتها. العجز لا يُرحَّل، ويمكن تغطيته من صندوق الطوارئ. */
 @Composable
-private fun WeekCard(week: WeekSummary, isCurrent: Boolean) {
+private fun DeficitCard(state: UiState) {
+    AppCard(border = BorderStroke(1.5.dp, Negative.copy(alpha = 0.7f))) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconBadge(Icons.Filled.Warning, Negative)
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text("العجز المسجّل", fontWeight = FontWeight.Bold, color = Negative)
+                Text(
+                    "لا يُرحَّل العجز إلى الأسبوع التالي.",
+                    color = MaterialTheme.colorScheme.secondary,
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+            Text(money(state.deficitTotal), fontWeight = FontWeight.Bold, color = Negative)
+        }
+        state.weeks.filter { it.deficit > 0 }.forEach { w ->
+            LabeledRow("الأسبوع ${w.index + 1}", money(w.deficit), Negative)
+        }
+    }
+}
+
+@Composable
+private fun WeekCard(
+    week: WeekSummary,
+    isCurrent: Boolean,
+    onSave: () -> Unit,
+    onCover: () -> Unit,
+    onUndo: (WeekAdjustment) -> Unit
+) {
     AppCard(border = if (isCurrent) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconBadge(Icons.Filled.DateRange, MaterialTheme.colorScheme.primary)
@@ -215,12 +299,52 @@ private fun WeekCard(week: WeekSummary, isCurrent: Boolean) {
             Text("المتاح ${money(week.available)}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
             Text("المصروف ${money(week.spent)}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
         }
-        if (week.carried != 0.0) {
+        if (week.carried > 0) {
             Text(
-                (if (week.carried > 0) "يتضمن مرحّلًا " else "يتضمن عجزًا مرحّلًا ") + money(kotlin.math.abs(week.carried)),
+                "يتضمن فائضًا مرحّلًا ${money(week.carried)}",
                 style = MaterialTheme.typography.bodySmall,
-                color = if (week.carried > 0) Positive else Negative
+                color = Positive
             )
+        }
+        if (week.deficit > 0) {
+            Text(
+                "عجز ${money(week.deficit)} — لا يُرحَّل إلى الأسبوع التالي",
+                style = MaterialTheme.typography.bodySmall,
+                color = Negative
+            )
+        }
+
+        if (week.surplus > 0 || week.deficit > 0) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (week.surplus > 0) {
+                    FilledTonalButton(onClick = onSave, modifier = Modifier.weight(1f)) {
+                        Icon(Icons.Filled.AccountBalanceWallet, null, Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("ادخر المتبقي")
+                    }
+                }
+                if (week.deficit > 0) {
+                    FilledTonalButton(onClick = onCover, modifier = Modifier.weight(1f)) {
+                        Icon(Icons.Filled.Shield, null, Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("غطِّ من الطوارئ")
+                    }
+                }
+            }
+        }
+
+        week.adjustments.forEach { a ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    (if (a.kind == WeekAdjustment.SAVE) "ادُّخر " else "غُطّي من الطوارئ ") + money(a.amount),
+                    Modifier.weight(1f),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (a.kind == WeekAdjustment.SAVE) Positive else MaterialTheme.colorScheme.secondary
+                )
+                IconButton(onClick = { onUndo(a) }, modifier = Modifier.size(32.dp)) {
+                    Icon(Icons.Filled.Delete, "تراجع", Modifier.size(18.dp), tint = MaterialTheme.colorScheme.secondary)
+                }
+            }
         }
 
         HorizontalDivider()

@@ -30,6 +30,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.weeklybudget.security.LockManager
 import java.time.format.TextStyle
 import java.util.Locale
 
@@ -43,7 +44,7 @@ private enum class AppTab(val label: String, val icon: ImageVector) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AppRoot(vm: BudgetViewModel) {
+fun AppRoot(vm: BudgetViewModel, lock: LockManager) {
     val state by vm.state.collectAsStateWithLifecycle()
     var selected by rememberSaveable { mutableIntStateOf(0) }
     val tabs = AppTab.values()
@@ -90,7 +91,7 @@ fun AppRoot(vm: BudgetViewModel) {
                 AppTab.Expenses -> ExpensesScreen(state, vm)
                 AppTab.Bills -> BillsScreen(state, vm)
                 AppTab.Savings -> SavingsDebtsScreen(state, vm)
-                AppTab.Settings -> SettingsScreen(state, vm)
+                AppTab.Settings -> SettingsScreen(state, vm, lock)
             }
         }
     }

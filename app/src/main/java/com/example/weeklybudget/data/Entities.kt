@@ -79,5 +79,47 @@ data class SavingsEntry(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val goalId: Long,
     val epochDay: Long,
-    val amount: Double
+    val amount: Double,
+    /** "SAVE" إن نشأ من ادخار فائض أسبوع، وإلا فارغ. */
+    val source: String = ""
+)
+
+/** تعديل على ميزانية أسبوع: ادخار فائضه أو تغطية عجزه من صندوق الطوارئ. */
+@Entity(tableName = "week_adjustment", indices = [Index("monthKey")])
+data class WeekAdjustment(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val monthKey: String,
+    val weekIndex: Int,
+    /** [SAVE] أو [COVER]. */
+    val kind: String,
+    val amount: Double,
+    val epochDay: Long,
+    /** وجهة الادخار: -1 صندوق الطوارئ، وإلا رقم هدف الادخار. */
+    val goalId: Long = -1,
+    /** رقم القيد المرتبط في جدول الادخار أو الطوارئ، لحذفه عند التراجع. */
+    val entryId: Long = 0
+) {
+    companion object {
+        const val SAVE = "SAVE"
+        const val COVER = "COVER"
+    }
+}
+
+/** إيداع (موجب) أو سحب (سالب) في صندوق الطوارئ. */
+@Entity(tableName = "emergency_entry")
+data class EmergencyEntry(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val epochDay: Long,
+    val amount: Double,
+    val note: String = "",
+    /** "SAVE" أو "COVER" إن نشأ من تعديل أسبوع، وإلا فارغ. */
+    val source: String = ""
+)
+
+@Entity(tableName = "emergency_settings")
+data class EmergencySettings(
+    @PrimaryKey val id: Int = 0,
+    /** الحد المستهدف للصندوق؛ 0 يعني بلا هدف. */
+    val target: Double = 0.0,
+    val monthlyContribution: Double = 0.0
 )

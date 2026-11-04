@@ -35,9 +35,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.weeklybudget.data.Category
+import com.example.weeklybudget.security.LockManager
 
 @Composable
-fun SettingsScreen(state: UiState, vm: BudgetViewModel) {
+fun SettingsScreen(state: UiState, vm: BudgetViewModel, lock: LockManager) {
     var incomeText by remember(state.period.ym, state.income) {
         mutableStateOf(if (state.income > 0) state.income.toLong().toString() else "")
     }
@@ -88,9 +89,9 @@ fun SettingsScreen(state: UiState, vm: BudgetViewModel) {
 
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text("ترحيل المتبقي", fontWeight = FontWeight.SemiBold)
+                    Text("ترحيل الفائض", fontWeight = FontWeight.SemiBold)
                     Text(
-                        "يُضاف ما تبقّى من الأسبوع (أو يُخصم عجزه) إلى الأسبوع التالي.",
+                        "يُضاف فائض الأسبوع إلى الأسبوع التالي. أما العجز فلا يُرحَّل أبدًا، ويُسجَّل في بطاقة العجز.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.secondary
                     )
@@ -145,6 +146,10 @@ fun SettingsScreen(state: UiState, vm: BudgetViewModel) {
                 Text("إضافة فئة جديدة")
             }
         }
+
+        AppLockCard(lock)
+
+        BackupCard(vm)
 
         AboutCard()
     }
