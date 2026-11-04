@@ -5,7 +5,14 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 
-@Database(entities = [MonthBudget::class, Expense::class], version = 1, exportSchema = false)
+@Database(
+    entities = [
+        MonthBudget::class, Category::class, Expense::class, Bill::class,
+        Debt::class, DebtPayment::class, SavingsGoal::class, SavingsEntry::class
+    ],
+    version = 2,
+    exportSchema = false
+)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun budgetDao(): BudgetDao
 
@@ -18,7 +25,10 @@ abstract class AppDatabase : RoomDatabase() {
                     context.applicationContext,
                     AppDatabase::class.java,
                     "weekly_budget.db"
-                ).build().also { instance = it }
+                )
+                    .fallbackToDestructiveMigration()
+                    .build()
+                    .also { instance = it }
             }
     }
 }
