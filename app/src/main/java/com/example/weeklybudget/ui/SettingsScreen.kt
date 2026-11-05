@@ -35,10 +35,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.weeklybudget.data.Category
+import com.example.weeklybudget.data.Profile
 import com.example.weeklybudget.security.LockManager
 
 @Composable
-fun SettingsScreen(state: UiState, vm: BudgetViewModel, lock: LockManager) {
+fun SettingsScreen(
+    state: UiState,
+    vm: BudgetViewModel,
+    lock: LockManager,
+    profile: Profile?,
+    onOpenProfile: () -> Unit
+) {
     var incomeText by remember(state.period.ym, state.income) {
         mutableStateOf(if (state.income > 0) state.income.toLong().toString() else "")
     }
@@ -58,9 +65,11 @@ fun SettingsScreen(state: UiState, vm: BudgetViewModel, lock: LockManager) {
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
+        ProfileSummaryCard(profile, onOpenProfile)
+
         AppCard {
             SectionHeader("الدخل والفترة")
-            AmountField(incomeText, { incomeText = it }, "دخل هذه الفترة ($CURRENCY)")
+            AmountField(incomeText, { incomeText = it }, "دخل هذه الفترة (${Currency.label})")
 
             Text("يوم بداية الشهر", fontWeight = FontWeight.SemiBold)
             Text(

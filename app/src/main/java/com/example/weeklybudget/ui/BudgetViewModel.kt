@@ -14,6 +14,7 @@ import com.example.weeklybudget.data.EmergencyEntry
 import com.example.weeklybudget.data.EmergencySettings
 import com.example.weeklybudget.data.Expense
 import com.example.weeklybudget.data.MonthBudget
+import com.example.weeklybudget.data.Profile
 import com.example.weeklybudget.data.SavingsEntry
 import com.example.weeklybudget.data.SavingsGoal
 import com.example.weeklybudget.data.Snapshot
@@ -29,14 +30,19 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
 import java.time.LocalDate
 import java.time.YearMonth
 
 /** معرّف وجهة «صندوق الطوارئ» عند ادخار فائض أسبوع. */
 const val EMERGENCY_ID = -1L
+
+/** [loaded] = false حتى تُقرأ قاعدة البيانات، لئلا تومض شاشة التسجيل لمن سجّل سابقًا. */
+data class ProfileState(val loaded: Boolean = false, val profile: Profile? = null)
 
 data class DebtUi(val debt: Debt, val paid: Double, val history: List<DebtPayment>) {
     val remaining: Double get() = (debt.total - paid).coerceAtLeast(0.0)
@@ -126,6 +132,17 @@ class BudgetViewModel(app: Application) : AndroidViewModel(app) {
     private val db = AppDatabase.get(app)
     private val dao = db.budgetDao()
     private val month = MutableStateFlow(YearMonth.now())
+
+    val profileState: StateFlow<ProfileState> = dao.observeProfile()
+        .map { ProfileState(loaded = true, profile = it) }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, ProfileState())
+
+    init {
+        // عملة العرض تتبع الملف الشخصي.
+        viewModelScope.launch {
+            profileState.collect { Currency.label = it.profile?.currency ?: DEFAULT_CURRENCY }
+        }
+    }
 
     init {
         viewModelScope.launch {
@@ -355,13 +372,41 @@ class BudgetViewModel(app: Application) : AndroidViewModel(app) {
         dao.upsertEmergencySettings(EmergencySettings(0, target, monthly))
     }
 
+    // ---- الملف الشخصي ----
+    fun registerProfile(name: String, phone: String) = viewModelScope.launch {
+        dao.upsertProfile(
+            Profile(name = name, phone = phone, currency = DEFAULT_CURRENCY, createdEpochDay = LocalDate.now().toEpochDay())
+        )
+    }
+
+    fun updateProfile(name: String, email: String, city: String, currency: String) = viewModelScope.launch {
+        val current = dao.profile() ?: return@launch
+        dao.upsertProfile(current.copy(name = name, email = email, city = city, currency = currency))
+    }
+
+    /** يحفظ مسار الصورة الجديدة ويحذف القديمة. مرّر نصًا فارغًا لإزالة الصورة. */
+    fun setProfilePhoto(path: String) = viewModelScope.launch {
+        val current = dao.profile() ?: return@launch
+        if (current.photoPath.isNotBlank()) withContext(Dispatchers.IO) { File(current.photoPath).delete() }
+        dao.upsertProfile(current.copy(photoPath = path))
+    }
+
+    /** تسجيل الخروج: يحذف الملف الشخصي وصورته، وتبقى البيانات المالية. */
+    fun logout() = viewModelScope.launch {
+        val current = dao.profile()
+        if (current != null && current.photoPath.isNotBlank()) {
+            withContext(Dispatchers.IO) { File(current.photoPath).delete() }
+        }
+        dao.clearProfile()
+    }
+
     // ---- النسخ الاحتياطي ----
     suspend fun exportJson(): String = withContext(Dispatchers.IO) {
         BackupJson.encode(
             Snapshot(
                 dao.allBudgets(), dao.allCategories(), dao.allExpenses(), dao.allBills(),
                 dao.allDebts(), dao.allDebtPayments(), dao.allGoals(), dao.allSavingsEntries(),
-                dao.allAdjustments(), dao.allEmergencyEntries(), dao.emergencySettings()
+                dao.allAdjustments(), dao.allEmergencyEntries(), dao.emergencySettings(), dao.profile()
             )
         )
     }
@@ -380,6 +425,11 @@ class BudgetViewModel(app: Application) : AndroidViewModel(app) {
                 dao.putGoals(s.goals); dao.putSavingsEntries(s.entries)
                 dao.putAdjustments(s.adjustments); dao.putEmergencyEntries(s.emergencyEntries)
                 s.emergencySettings?.let { dao.upsertEmergencySettings(it) }
+                // لا يُستبدل الملف الشخصي الحالي إلا إن حوت النسخة ملفًا شخصيًا، وتُحفظ صورته الحالية.
+                s.profile?.let { restored ->
+                    val photo = dao.profile()?.photoPath ?: ""
+                    dao.upsertProfile(restored.copy(photoPath = photo))
+                }
             }
             true
         } catch (e: Exception) {

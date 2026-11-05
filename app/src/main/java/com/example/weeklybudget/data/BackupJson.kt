@@ -15,13 +15,14 @@ data class Snapshot(
     val entries: List<SavingsEntry>,
     val adjustments: List<WeekAdjustment>,
     val emergencyEntries: List<EmergencyEntry>,
-    val emergencySettings: EmergencySettings?
+    val emergencySettings: EmergencySettings?,
+    val profile: Profile?
 )
 
 /** تحويل اللقطة إلى JSON وبالعكس. يستعمل org.json المضمّنة في أندرويد، فلا مكتبات إضافية. */
 object BackupJson {
     private const val FORMAT = "weekly-budget-backup"
-    private const val VERSION = 2
+    private const val VERSION = 3
 
     private fun <T> JSONArray?.toList(f: (JSONObject) -> T): List<T> =
         if (this == null) emptyList() else (0 until length()).map { f(getJSONObject(it)) }
@@ -78,6 +79,14 @@ object BackupJson {
         s.emergencySettings?.let {
             put("emergencySettings", JSONObject().put("target", it.target).put("monthlyContribution", it.monthlyContribution))
         }
+        // الصورة لا تُنسخ (ملف محلي)، أما بقية بيانات الملف الشخصي فتُنسخ.
+        s.profile?.let {
+            put(
+                "profile",
+                JSONObject().put("name", it.name).put("phone", it.phone).put("email", it.email)
+                    .put("city", it.city).put("currency", it.currency).put("createdEpochDay", it.createdEpochDay)
+            )
+        }
     }.toString(2)
 
     /** يرمي استثناءً إن لم يكن الملف نسخة صالحة من هذا التطبيق. الحقول الجديدة اختيارية ليُقبل الملف القديم. */
@@ -122,6 +131,18 @@ object BackupJson {
             },
             emergencySettings = o.optJSONObject("emergencySettings")?.let {
                 EmergencySettings(0, it.getDouble("target"), it.getDouble("monthlyContribution"))
+            },
+            profile = o.optJSONObject("profile")?.let {
+                Profile(
+                    id = 0,
+                    name = it.getString("name"),
+                    phone = it.getString("phone"),
+                    email = it.optString("email", ""),
+                    city = it.optString("city", ""),
+                    currency = it.optString("currency", "دج"),
+                    photoPath = "",
+                    createdEpochDay = it.getLong("createdEpochDay")
+                )
             }
         )
     }

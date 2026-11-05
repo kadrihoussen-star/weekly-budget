@@ -136,6 +136,19 @@ interface BudgetDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertEmergencySettings(s: EmergencySettings)
 
+    // ---- الملف الشخصي ----
+    @Query("SELECT * FROM profile WHERE id = 0")
+    fun observeProfile(): Flow<Profile?>
+
+    @Query("SELECT * FROM profile WHERE id = 0")
+    suspend fun profile(): Profile?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertProfile(p: Profile)
+
+    @Query("DELETE FROM profile")
+    suspend fun clearProfile()
+
     @Query("SELECT * FROM week_adjustment") suspend fun allAdjustments(): List<WeekAdjustment>
     @Query("SELECT * FROM emergency_entry") suspend fun allEmergencyEntries(): List<EmergencyEntry>
     @Query("DELETE FROM week_adjustment") suspend fun clearAdjustments()

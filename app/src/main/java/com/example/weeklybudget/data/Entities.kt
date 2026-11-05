@@ -116,6 +116,21 @@ data class EmergencyEntry(
     val source: String = ""
 )
 
+/** الملف الشخصي المحلي (سجل واحد). الرقم يُحفظ على الهاتف فقط ولا يُتحقق منه برسالة. */
+@Entity(tableName = "profile")
+data class Profile(
+    @PrimaryKey val id: Int = 0,
+    val name: String,
+    /** بصيغة دولية، مثل +213550123456. */
+    val phone: String,
+    val email: String = "",
+    val city: String = "",
+    val currency: String = "دج",
+    /** مسار صورة الملف الشخصي داخل مساحة التطبيق، أو فارغ. */
+    val photoPath: String = "",
+    val createdEpochDay: Long
+)
+
 @Entity(tableName = "emergency_settings")
 data class EmergencySettings(
     @PrimaryKey val id: Int = 0,

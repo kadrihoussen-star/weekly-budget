@@ -47,9 +47,16 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-const val CURRENCY = "دج"
+const val DEFAULT_CURRENCY = "دج"
 
-fun money(v: Double): String = String.format(Locale.US, "%,.0f", v) + " " + CURRENCY
+/** عملة العرض الحالية؛ حالة Compose فتتحدّث الشاشات تلقائيًا عند تغييرها من الملف الشخصي. */
+object Currency {
+    var label by mutableStateOf(DEFAULT_CURRENCY)
+}
+
+val CurrencyOptions = listOf("دج", "$", "€", "£", "ر.س", "د.إ", "د.م", "د.ت")
+
+fun money(v: Double): String = String.format(Locale.US, "%,.0f", v) + " " + Currency.label
 
 private val DayMonth: DateTimeFormatter = DateTimeFormatter.ofPattern("d MMM", Locale.forLanguageTag("ar"))
 

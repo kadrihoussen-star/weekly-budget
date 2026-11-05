@@ -45,7 +45,7 @@ fun SaveSurplusDialog(
                     "المتاح للادخار: ${money(surplus)}",
                     color = MaterialTheme.colorScheme.secondary
                 )
-                AmountField(text, { text = it }, "المبلغ ($CURRENCY)")
+                AmountField(text, { text = it }, "المبلغ (${Currency.label})")
                 Text("ادّخره في:", fontWeight = FontWeight.Bold)
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     item {
@@ -95,7 +95,7 @@ fun LimitedAmountDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(hint, color = MaterialTheme.colorScheme.secondary)
-                AmountField(text, { text = it }, "المبلغ ($CURRENCY)")
+                AmountField(text, { text = it }, "المبلغ (${Currency.label})")
                 if (value != null && value > max + 0.5) {
                     Text("المبلغ أكبر من الحد المسموح (${money(max)})", color = Negative)
                 }

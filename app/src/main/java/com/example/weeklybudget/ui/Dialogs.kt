@@ -88,7 +88,7 @@ fun ExpenseDialog(
         title = { Text("مصروف جديد") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                AmountField(amountText, { amountText = it }, "المبلغ ($CURRENCY)")
+                AmountField(amountText, { amountText = it }, "المبلغ (${Currency.label})")
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(categories, key = { it.id }) { c ->
                         FilterChip(
@@ -142,7 +142,7 @@ fun BillDialog(
                     label = { Text("اسم الفاتورة (كهرباء، إنترنت...)") },
                     singleLine = true, modifier = Modifier.fillMaxWidth()
                 )
-                AmountField(amountText, { amountText = it }, "المبلغ ($CURRENCY)")
+                AmountField(amountText, { amountText = it }, "المبلغ (${Currency.label})")
                 AmountField(dayText, { dayText = it }, "يوم الاستحقاق (1 - 31)")
                 IconPicker(BillIconKeys, icon) { icon = it }
             }
@@ -174,8 +174,8 @@ fun DebtDialog(onDismiss: () -> Unit, onSave: (name: String, total: Double, inst
                     label = { Text("اسم الدين أو الدائن") },
                     singleLine = true, modifier = Modifier.fillMaxWidth()
                 )
-                AmountField(totalText, { totalText = it }, "إجمالي الدين ($CURRENCY)")
-                AmountField(installmentText, { installmentText = it }, "القسط الشهري ($CURRENCY)")
+                AmountField(totalText, { totalText = it }, "إجمالي الدين (${Currency.label})")
+                AmountField(installmentText, { installmentText = it }, "القسط الشهري (${Currency.label})")
             }
         },
         confirmButton = {
@@ -205,8 +205,8 @@ fun GoalDialog(onDismiss: () -> Unit, onSave: (name: String, target: Double, mon
                     label = { Text("اسم الهدف (سفر، سيارة...)") },
                     singleLine = true, modifier = Modifier.fillMaxWidth()
                 )
-                AmountField(targetText, { targetText = it }, "المبلغ المستهدف ($CURRENCY)")
-                AmountField(monthlyText, { monthlyText = it }, "الادخار الشهري ($CURRENCY)")
+                AmountField(targetText, { targetText = it }, "المبلغ المستهدف (${Currency.label})")
+                AmountField(monthlyText, { monthlyText = it }, "الادخار الشهري (${Currency.label})")
             }
         },
         confirmButton = {
@@ -232,7 +232,7 @@ fun AmountDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
-        text = { AmountField(text, { text = it }, "المبلغ ($CURRENCY)") },
+        text = { AmountField(text, { text = it }, "المبلغ (${Currency.label})") },
         confirmButton = {
             TextButton(onClick = { if (valid) onSave(value!!) }, enabled = valid) { Text(confirmLabel) }
         },

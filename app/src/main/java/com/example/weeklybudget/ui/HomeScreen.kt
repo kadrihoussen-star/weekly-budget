@@ -44,12 +44,19 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.example.weeklybudget.data.Profile
 import com.example.weeklybudget.data.WeekAdjustment
 import com.example.weeklybudget.domain.CategorySpend
 import com.example.weeklybudget.domain.WeekSummary
 
 @Composable
-fun HomeScreen(state: UiState, vm: BudgetViewModel, onOpenSettings: () -> Unit) {
+fun HomeScreen(
+    state: UiState,
+    vm: BudgetViewModel,
+    profile: Profile?,
+    onOpenSettings: () -> Unit,
+    onOpenProfile: () -> Unit
+) {
     var saveFor by remember { mutableStateOf<WeekSummary?>(null) }
     var coverFor by remember { mutableStateOf<WeekSummary?>(null) }
 
@@ -59,6 +66,7 @@ fun HomeScreen(state: UiState, vm: BudgetViewModel, onOpenSettings: () -> Unit) 
             contentPadding = PaddingValues(16.dp, 8.dp, 16.dp, 110.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
+            item { GreetingRow(profile, onOpenProfile) }
             item { HeroCard(state) }
 
             if (!state.hasBudget) {
