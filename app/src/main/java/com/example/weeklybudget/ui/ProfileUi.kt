@@ -43,46 +43,6 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.time.LocalTime
 
-data class Country(val name: String, val code: String)
-
-val Countries = listOf(
-    Country("الجزائر", "+213"),
-    Country("تونس", "+216"),
-    Country("المغرب", "+212"),
-    Country("ليبيا", "+218"),
-    Country("مصر", "+20"),
-    Country("السعودية", "+966"),
-    Country("الإمارات", "+971"),
-    Country("فرنسا", "+33")
-)
-
-/** يحوّل الأرقام العربية والفارسية إلى لاتينية. */
-fun latinDigits(s: String): String =
-    s.map { c ->
-        when (c) {
-            in '٠'..'٩' -> '0' + (c - '٠')
-            in '۰'..'۹' -> '0' + (c - '۰')
-            else -> c
-        }
-    }.joinToString("")
-
-/**
- * يعيد الرقم بصيغة دولية (+213550123456) أو null إن كان غير صالح.
- * للجزائر: 9 أرقام تبدأ بـ 5 أو 6 أو 7 (بعد حذف الصفر الأول).
- */
-fun normalizePhone(code: String, input: String): String? {
-    var digits = latinDigits(input).filter { it.isDigit() }
-    if (digits.startsWith("0")) digits = digits.drop(1)
-    return if (code == "+213") {
-        if (Regex("[567]\\d{8}").matches(digits)) code + digits else null
-    } else {
-        if (digits.length in 7..12) code + digits else null
-    }
-}
-
-/** يحيط الرقم بعلامات اتجاه ليظهر سليمًا داخل واجهة من اليمين إلى اليسار. */
-fun displayPhone(phone: String): String = "⁦$phone⁩"
-
 fun greeting(): String {
     val hour = LocalTime.now().hour
     return when {
@@ -114,7 +74,7 @@ suspend fun saveProfilePhoto(context: Context, uri: Uri): String? = withContext(
     }.getOrNull()
 }
 
-/** صورة المستخدم، أو حرفه الأول على خلفية متدرجة إن لم تُحدَّد صورة. */
+/** صورة المستخدم، أو حرفه الأول على خلفية متدرجة إن لم تُحدَّد صورة أو اسم. */
 @Composable
 fun Avatar(profile: Profile?, size: Dp, modifier: Modifier = Modifier) {
     val bitmap = remember(profile?.photoPath) {
@@ -139,6 +99,7 @@ fun Avatar(profile: Profile?, size: Dp, modifier: Modifier = Modifier) {
 /** تحية أعلى الشاشة الرئيسية؛ تفتح الملف الشخصي عند الضغط. */
 @Composable
 fun GreetingRow(profile: Profile?, onClick: () -> Unit) {
+    val name = profile?.name?.takeIf { it.isNotBlank() }
     Row(
         Modifier
             .fillMaxWidth()
@@ -150,7 +111,7 @@ fun GreetingRow(profile: Profile?, onClick: () -> Unit) {
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Text(greeting(), color = MaterialTheme.colorScheme.secondary, style = MaterialTheme.typography.bodySmall)
-            Text(profile?.name ?: "", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+            Text(name ?: "أضف ملفك الشخصي", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
         }
         Icon(Icons.Filled.ChevronLeft, contentDescription = "الملف الشخصي", tint = MaterialTheme.colorScheme.secondary)
     }
@@ -159,14 +120,15 @@ fun GreetingRow(profile: Profile?, onClick: () -> Unit) {
 /** بطاقة مختصرة في الإعدادات تفتح الملف الشخصي. */
 @Composable
 fun ProfileSummaryCard(profile: Profile?, onClick: () -> Unit) {
+    val name = profile?.name?.takeIf { it.isNotBlank() }
     AppCard(modifier = Modifier.clickable(onClick = onClick)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Avatar(profile, 52.dp)
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(profile?.name ?: "", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                Text(name ?: "الملف الشخصي", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
                 Text(
-                    profile?.phone?.let(::displayPhone) ?: "",
+                    if (name != null) "عرض الملف وتعديله" else "أضف اسمك وصورتك وعملتك",
                     color = MaterialTheme.colorScheme.secondary,
                     style = MaterialTheme.typography.bodySmall
                 )

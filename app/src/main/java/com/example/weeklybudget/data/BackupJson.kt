@@ -83,7 +83,7 @@ object BackupJson {
         s.profile?.let {
             put(
                 "profile",
-                JSONObject().put("name", it.name).put("phone", it.phone).put("email", it.email)
+                JSONObject().put("name", it.name).put("email", it.email)
                     .put("city", it.city).put("currency", it.currency).put("createdEpochDay", it.createdEpochDay)
             )
         }
@@ -136,7 +136,7 @@ object BackupJson {
                 Profile(
                     id = 0,
                     name = it.getString("name"),
-                    phone = it.getString("phone"),
+                    phone = "",
                     email = it.optString("email", ""),
                     city = it.optString("city", ""),
                     currency = it.optString("currency", "دج"),

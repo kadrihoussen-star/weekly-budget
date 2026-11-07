@@ -29,8 +29,8 @@ import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.EmojiEvents
-import androidx.compose.material.icons.filled.Logout
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material3.Button
 import androidx.compose.material3.CenterAlignedTopAppBar
@@ -63,18 +63,19 @@ import kotlinx.coroutines.launch
 
 private data class Badge(val icon: ImageVector, val title: String, val hint: String, val achieved: Boolean)
 
+/** الملف الشخصي اختياري: [profile] قد يكون null، ويُنشأ عند أول حفظ أو اختيار صورة. */
 @Composable
-fun ProfileScreen(state: UiState, profile: Profile, vm: BudgetViewModel, onBack: () -> Unit) {
+fun ProfileScreen(state: UiState, profile: Profile?, vm: BudgetViewModel, onBack: () -> Unit) {
     BackHandler(onBack = onBack)
 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    var name by remember(profile.name) { mutableStateOf(profile.name) }
-    var email by remember(profile.email) { mutableStateOf(profile.email) }
-    var city by remember(profile.city) { mutableStateOf(profile.city) }
-    var currency by remember(profile.currency) { mutableStateOf(profile.currency) }
-    var confirmLogout by remember { mutableStateOf(false) }
+    var name by remember(profile?.name) { mutableStateOf(profile?.name ?: "") }
+    var email by remember(profile?.email) { mutableStateOf(profile?.email ?: "") }
+    var city by remember(profile?.city) { mutableStateOf(profile?.city ?: "") }
+    var currency by remember(profile?.currency) { mutableStateOf(profile?.currency ?: DEFAULT_CURRENCY) }
+    var confirmDelete by remember { mutableStateOf(false) }
 
     val photoPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         if (uri != null) scope.launch {
@@ -85,7 +86,8 @@ fun ProfileScreen(state: UiState, profile: Profile, vm: BudgetViewModel, onBack:
     }
 
     val nameOk = name.trim().length >= 2
-    val changed = name.trim() != profile.name || email.trim() != profile.email ||
+    val changed = profile == null ||
+        name.trim() != profile.name || email.trim() != profile.email ||
         city.trim() != profile.city || currency != profile.currency
 
     Scaffold(
@@ -109,7 +111,11 @@ fun ProfileScreen(state: UiState, profile: Profile, vm: BudgetViewModel, onBack:
         ) {
             // ---- الترويسة ----
             AppCard {
-                Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Column(
+                    Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
                     Box {
                         Avatar(profile, 104.dp)
                         IconButton(
@@ -122,14 +128,19 @@ fun ProfileScreen(state: UiState, profile: Profile, vm: BudgetViewModel, onBack:
                             Icon(Icons.Filled.CameraAlt, "تغيير الصورة", tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(18.dp))
                         }
                     }
-                    Text(profile.name, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                    Text(displayPhone(profile.phone), color = MaterialTheme.colorScheme.secondary)
                     Text(
-                        "عضو منذ ${fmtEpoch(profile.createdEpochDay)}",
-                        color = MaterialTheme.colorScheme.secondary,
-                        style = MaterialTheme.typography.bodySmall
+                        profile?.name?.takeIf { it.isNotBlank() } ?: "أضف اسمك",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
                     )
-                    if (profile.photoPath.isNotBlank()) {
+                    if (profile != null) {
+                        Text(
+                            "معك منذ ${fmtEpoch(profile.createdEpochDay)}",
+                            color = MaterialTheme.colorScheme.secondary,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                    if (profile?.photoPath?.isNotBlank() == true) {
                         TextButton(onClick = { vm.setProfilePhoto("") }) { Text("إزالة الصورة") }
                     }
                 }
@@ -166,19 +177,22 @@ fun ProfileScreen(state: UiState, profile: Profile, vm: BudgetViewModel, onBack:
                         }
                     }
                 }
-                badges.filter { !it.achieved }.firstOrNull()?.let {
-                    Text("الوسام التالي: «${it.title}» — ${it.hint}", color = MaterialTheme.colorScheme.secondary, style = MaterialTheme.typography.bodySmall)
+                badges.firstOrNull { !it.achieved }?.let {
+                    Text(
+                        "الوسام التالي: «${it.title}» — ${it.hint}",
+                        color = MaterialTheme.colorScheme.secondary,
+                        style = MaterialTheme.typography.bodySmall
+                    )
                 }
             }
 
             // ---- ملخص مالي ----
-            val totalPaid = state.debts.sumOf { it.paid }
             AppCard {
                 SectionHeader("ملخصي المالي")
                 SummaryRow(Icons.Filled.AccountBalanceWallet, "إجمالي المدّخر في الأهداف", money(state.goals.sumOf { it.saved }), Positive)
                 SummaryRow(Icons.Filled.Shield, "رصيد صندوق الطوارئ", money(state.emergency.balance), Color(0xFF0EA5E9))
                 SummaryRow(Icons.Filled.AccountBalance, "المتبقي من الديون", money(state.debts.sumOf { it.remaining }), Negative)
-                SummaryRow(Icons.Filled.CheckCircle, "إجمالي ما سُدِّد من الديون", money(totalPaid), Positive)
+                SummaryRow(Icons.Filled.CheckCircle, "إجمالي ما سُدِّد من الديون", money(state.debts.sumOf { it.paid }), Positive)
                 HorizontalDivider()
                 LabeledRow("عدد مصاريف هذه الفترة", state.expenses.size.toString())
             }
@@ -189,7 +203,7 @@ fun ProfileScreen(state: UiState, profile: Profile, vm: BudgetViewModel, onBack:
                 OutlinedTextField(
                     value = name, onValueChange = { name = it },
                     label = { Text("الاسم") }, singleLine = true,
-                    isError = !nameOk, modifier = Modifier.fillMaxWidth()
+                    isError = name.isNotEmpty() && !nameOk, modifier = Modifier.fillMaxWidth()
                 )
                 OutlinedTextField(
                     value = email, onValueChange = { email = it },
@@ -208,34 +222,36 @@ fun ProfileScreen(state: UiState, profile: Profile, vm: BudgetViewModel, onBack:
                     }
                 }
                 Button(
-                    onClick = { vm.updateProfile(name.trim(), email.trim(), city.trim(), currency) },
+                    onClick = { vm.saveProfile(name.trim(), email.trim(), city.trim(), currency) },
                     enabled = nameOk && changed,
                     modifier = Modifier.fillMaxWidth()
-                ) { Text("حفظ التعديلات") }
+                ) { Text("حفظ") }
             }
 
-            OutlinedButton(onClick = { confirmLogout = true }, modifier = Modifier.fillMaxWidth()) {
-                Icon(Icons.Filled.Logout, null, tint = Negative)
-                Spacer(Modifier.width(8.dp))
-                Text("تسجيل الخروج", color = Negative)
+            if (profile != null) {
+                OutlinedButton(onClick = { confirmDelete = true }, modifier = Modifier.fillMaxWidth()) {
+                    Icon(Icons.Filled.Delete, null, tint = Negative)
+                    Spacer(Modifier.width(8.dp))
+                    Text("حذف الملف الشخصي", color = Negative)
+                }
+                Text(
+                    "يحذف اسمك وصورتك وبريدك فقط، وتبقى بياناتك المالية كما هي.",
+                    color = MaterialTheme.colorScheme.secondary,
+                    style = MaterialTheme.typography.bodySmall
+                )
             }
-            Text(
-                "تسجيل الخروج يحذف ملفك الشخصي من هذا الهاتف فقط، وتبقى بياناتك المالية كما هي.",
-                color = MaterialTheme.colorScheme.secondary,
-                style = MaterialTheme.typography.bodySmall
-            )
         }
     }
 
-    if (confirmLogout) {
+    if (confirmDelete) {
         ConfirmDialog(
-            text = "سيُحذف ملفك الشخصي وصورتك، وسيُطلب منك التسجيل من جديد. بياناتك المالية لن تتأثر.",
+            text = "سيُحذف ملفك الشخصي وصورتك من هذا الهاتف. بياناتك المالية لن تتأثر.",
             onConfirm = {
-                confirmLogout = false
-                vm.logout()
+                confirmDelete = false
+                vm.deleteProfile()
                 onBack()
             },
-            onDismiss = { confirmLogout = false }
+            onDismiss = { confirmDelete = false }
         )
     }
 }

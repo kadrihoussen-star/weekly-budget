@@ -116,13 +116,13 @@ data class EmergencyEntry(
     val source: String = ""
 )
 
-/** الملف الشخصي المحلي (سجل واحد). الرقم يُحفظ على الهاتف فقط ولا يُتحقق منه برسالة. */
+/** الملف الشخصي المحلي (سجل واحد، اختياري). */
 @Entity(tableName = "profile")
 data class Profile(
     @PrimaryKey val id: Int = 0,
     val name: String,
-    /** بصيغة دولية، مثل +213550123456. */
-    val phone: String,
+    /** لم يعد يُستعمل بعد إزالة التسجيل برقم الهاتف؛ بقي العمود لتفادي ترحيل جديد لقاعدة البيانات. */
+    val phone: String = "",
     val email: String = "",
     val city: String = "",
     val currency: String = "دج",

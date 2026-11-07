@@ -63,8 +63,6 @@ fun AppRoot(vm: BudgetViewModel, lock: LockManager) {
         !profileState.loaded ->
             Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background))
 
-        profile == null -> RegisterScreen(vm)
-
         showProfile -> ProfileScreen(state, profile, vm, onBack = { showProfile = false })
 
         else -> MainContent(
@@ -85,7 +83,7 @@ private fun MainContent(
     state: UiState,
     vm: BudgetViewModel,
     lock: LockManager,
-    profile: Profile,
+    profile: Profile?,
     selected: Int,
     onSelect: (Int) -> Unit,
     onOpenProfile: () -> Unit

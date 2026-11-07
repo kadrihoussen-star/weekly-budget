@@ -373,26 +373,23 @@ class BudgetViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     // ---- الملف الشخصي ----
-    fun registerProfile(name: String, phone: String) = viewModelScope.launch {
-        dao.upsertProfile(
-            Profile(name = name, phone = phone, currency = DEFAULT_CURRENCY, createdEpochDay = LocalDate.now().toEpochDay())
-        )
-    }
+    /** الملف الشخصي اختياري، فيُنشأ عند أول حفظ إن لم يوجد. */
+    private suspend fun currentOrNewProfile(): Profile =
+        dao.profile() ?: Profile(name = "", phone = "", createdEpochDay = LocalDate.now().toEpochDay())
 
-    fun updateProfile(name: String, email: String, city: String, currency: String) = viewModelScope.launch {
-        val current = dao.profile() ?: return@launch
-        dao.upsertProfile(current.copy(name = name, email = email, city = city, currency = currency))
+    fun saveProfile(name: String, email: String, city: String, currency: String) = viewModelScope.launch {
+        dao.upsertProfile(currentOrNewProfile().copy(name = name, email = email, city = city, currency = currency))
     }
 
     /** يحفظ مسار الصورة الجديدة ويحذف القديمة. مرّر نصًا فارغًا لإزالة الصورة. */
     fun setProfilePhoto(path: String) = viewModelScope.launch {
-        val current = dao.profile() ?: return@launch
+        val current = currentOrNewProfile()
         if (current.photoPath.isNotBlank()) withContext(Dispatchers.IO) { File(current.photoPath).delete() }
         dao.upsertProfile(current.copy(photoPath = path))
     }
 
-    /** تسجيل الخروج: يحذف الملف الشخصي وصورته، وتبقى البيانات المالية. */
-    fun logout() = viewModelScope.launch {
+    /** يحذف الملف الشخصي وصورته، وتبقى البيانات المالية. */
+    fun deleteProfile() = viewModelScope.launch {
         val current = dao.profile()
         if (current != null && current.photoPath.isNotBlank()) {
             withContext(Dispatchers.IO) { File(current.photoPath).delete() }
